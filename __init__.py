@@ -7,25 +7,26 @@ logged_in = False
 token = None
 
 async def login(config, session):
-    url = config['skills']['salt']['url']
-    username = config['skills']['salt']['username']
-    password = config['skills']['salt']['password']
+    url = config['url']
+    username = config['username']
+    password = config['password']
     data = {
         'username': username,
         'password': password,
         'eauth': 'auto',
     }
-    async with session.post(url + '/login', data) as resp:
-        # TODO: handle an error condition
+    async with session.post(url + '/login', json=data) as resp:
+        # TODO: onsider response code, handle errors.
+        logged_in = True
 
 async def run_post(runner, config):
-    async with aiohttp.ClientSession() as session:
+    verify_ssl = True
+    if 'verify_ssl' in config:
+        verify_ssl = config['verify_ssl']
+    conn = aiohttp.TCPConnector(verify_ssl=verify_ssl)
+    async with aiohttp.ClientSession(connector=conn) as session:
         if not logged_in:
             await login(config, session)
-            # TODO: check this cookie handling
-            token = session.cookie_jar['token']
-        else:
-            session.cookie_jar.update_cookies({'token': token)
 
         data = {
             'client': 'runner',
@@ -36,8 +37,8 @@ async def run_post(runner, config):
 
 @match_regex(r'^salt-run (.*)')
 async def salt_run(opsdroid, config, message):
-    runner = message.group[1]
+    runner = message.regex.group(1)
 
-    await result = run_post(runner)
-    await.message.respond(result.json())
+    result = await run_post(runner, config)
+    await message.respond(result.json())
 
