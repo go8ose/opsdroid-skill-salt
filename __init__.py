@@ -27,42 +27,28 @@ async def login(config, session):
 # time.  We store them in the config object as a convinent way of accessing
 # them later.
 def setup(opsdroid):
-    verify_ssl = True
     my_config = [s for s in opsdroid.config['skills'] if s['name'] == 'salt'][0]
-    if 'verify_ssl' in my_config:
-        verify_ssl = my_config['verify_ssl']
-    my_config['aio_connector'] = aiohttp.TCPConnector(verify_ssl=verify_ssl)
+    if 'verify_ssl' not in my_config:
+        my_config['verify_ssl'] = True
     my_config['aio_cookiejar'] = aiohttp.CookieJar()
 
-async def dispatch_salt_run(runner, config):
-    async with aiohttp.ClientSession(connector=config['aio_connector'], cookie_jar=config['aio_cookiejar']) as session:
+async def dispatch_salt_message(data, config):
+    aio_connector = aiohttp.TCPConnector(verify_ssl=config['verify_ssl'])
+    async with aiohttp.ClientSession(connector=aio_connector, cookie_jar=config['aio_cookiejar']) as session:
+
+        # Login, if we don't already have a session_id cookie.
         if len([i for i in session.cookie_jar if i.key == 'session_id']) == 0:
             await login(config, session)
 
-        data = {
-            'client': 'runner',
-            'fun': runner
-        }
-        url = config['url']
-        async with session.post(url, json=data) as resp:
-            return resp
+        async with session.post(config['url'], json=data) as resp:
+            if resp.status != 200:
+                await message.respond('Error returned from salt {}: {}'.format(result.status, result.reason))
+                return None
+            else:
+                result_text = await resp.text()
+                return result_text
 
-async def dispatch_salt(tgt, function, tgt_type, config, *arg, **kwarg):
-    async with aiohttp.ClientSession(connector=config['aio_connector'], cookie_jar=config['aio_cookiejar']) as session:
-        if len([i for i in session.cookie_jar if i.key == 'session_id']) == 0:
-            await login(config, session)
 
-        data = {
-            'client': 'local',
-            'tgt': tgt,
-            'tgt_type': tgt_type,
-            'fun': function,
-            'arg': arg,
-            'kwarg': kwarg,
-        }
-        url = config['url']
-        async with session.post(url, json=data) as resp:
-            return resp
 
 @match_regex(r'^salt-run (.*)')
 async def salt_run(opsdroid, config, message):
@@ -73,12 +59,12 @@ async def salt_run(opsdroid, config, message):
     runner = message.regex.group(1)
 
     try:
-        result = await dispatch_salt_run(runner, config)
-        if result.status != 200:
-            await message.respond('Error returned from salt for runner {}: {} ({})'.format(runner, result.status, result.reason))
-        else:
-            result_text = await result.text()
-            await message.respond(result_text)
+        data = {
+            'client': 'runner',
+            'fun': runner
+        }
+        result_text = await dispatch_salt_message(data, config)
+        await message.respond(result_text)
     except LoginError:
         await message.respond('Login Error to salt. Check logs.')
 
@@ -111,12 +97,15 @@ async def salt(opsdroid, config, message):
         del kwargs_dict['tgt_type']
 
     try:
-        result = await dispatch_salt(tgt=tgt, function=function, tgt_type=tgt_type, 
-            config=config, *args, **kwargs_dict)
-        if result.status != 200:
-            await message.respond('Error returned from salt {}: {} ({})'.format(data, result.status, result.reason))
-        else:
-            result_text = await result.text()
-            await message.respond(result_text)
+        data = {
+            'client': 'local',
+            'tgt': tgt,
+            'tgt_type': tgt_type,
+            'fun': function,
+            'arg': args,
+            'kwarg': kwargs_dict,
+        }
+        result_text = await dispatch_salt_message(data, config)
+        await message.respond(result_text)
     except LoginError:
         await message.respond('Login Error to salt. Check logs.')
