@@ -23,9 +23,9 @@ async def login(config, session):
 
 
 # Setup some things we can re-use for each time we're invoked.  Hopefully by
-# persisting (in-memory) the cookie_jar we'll and connector we'll save some
-# time.  We store them in the config object as a convinent way of accessing
-# them later.
+# persisting (in-memory) the cookie_jar we'll save some time, by avoiding
+# re-authenticating all the time.  We store them in the config object as a
+# convinent way of accessing them later.
 def setup(opsdroid):
     my_config = [s for s in opsdroid.config['skills'] if s['name'] == 'salt'][0]
     if 'verify_ssl' not in my_config:
