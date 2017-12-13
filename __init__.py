@@ -6,6 +6,10 @@ import logging
 class LoginError(Exception):
     pass
 
+output_function_map = {
+    'raw': lambda x: x,
+}
+
 async def login(config, session):
     url = config['url']
     data = {
@@ -28,8 +32,18 @@ async def login(config, session):
 # convinent way of accessing them later.
 def setup(opsdroid):
     my_config = [s for s in opsdroid.config['skills'] if s['name'] == 'salt'][0]
+
     if 'verify_ssl' not in my_config:
         my_config['verify_ssl'] = True
+
+    if 'output' not in my_config:
+        my_config['output'] = 'raw'
+    else:
+        # Check output setting
+        if my_config['output'] not in output_function_map.keys():
+            logging.warning("Invalid output selected, forcing to raw")
+            my_config['output'] = 'raw'
+
     my_config['aio_cookiejar'] = aiohttp.CookieJar()
 
 async def dispatch_salt_message(data, config):
@@ -46,7 +60,7 @@ async def dispatch_salt_message(data, config):
                 return None
             else:
                 result_text = await resp.text()
-                return result_text
+                return output_function_map[config['output']](result_text)
 
 
 
@@ -109,3 +123,17 @@ async def salt(opsdroid, config, message):
         await message.respond(result_text)
     except LoginError:
         await message.respond('Login Error to salt. Check logs.')
+
+@match_regex( r'^salt-output(?:\s+(?P<output>\w+))?')
+async def salt_output(opsdroid, config, message):
+    '''Allow you to check the current output, or to change the output'''
+
+    if message.regex.group('output'):
+        output = message.regex.group('output')
+        if output not in output_function_map.keys():
+            await message.respond('Not a valid output. Valid outputs are: {}'.format(' '.join(output_function_map.keys())))
+        else:
+            config['output'] = output
+            
+    else:
+        await message.respond('Current output is {}'.format(config['output']))

@@ -31,12 +31,45 @@ skills:
   - name: salt
     path:  https://github.com/go8ose/opsdroid-skill-salt.git
     url: https://salt.example.com:8000   
+    output: raw
     username: salt-account
     password: ****
     eauth: pam
 ```
 
 The username, password and eauth are used directly when communicating with the salt-api daemon.  There is also a 'verify-ssl' boolean option.  You can set that to *False* if you're using a self signed certificate on the salt-api daemon during testing.
+
+Currently the 'output' option can be configured, but the only valid value is
+'raw'.  In future the intention is to do provide a default output option
+that is a bit easier to read.
+
+## Usage
+
+Currently you can 
+ * invoke salt runners, https://docs.saltstack.com/en/latest/ref/runners/, 
+ * execute remote commands, https://docs.saltstack.com/en/getstarted/fundamentals/remotex.html
+ * check and set the output that the bot uses.
+
+An example of calling a salt runner is:
+
+```
+    salt-run manage.up
+```
+
+Here is an example of running a remote command:
+
+```
+    salt .* test.ping
+
+```
+
+Here is an example of trying to set, and then check the output this bot is
+using:
+```
+    salt-output raw
+
+    salt-output
+```
 
 ## License
 
